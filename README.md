@@ -78,3 +78,4 @@ DELETE /delete-user/{user_id}: Remove a user profile (Requires master token).
 GET /users: Retrieve all user records in GeoJSON format (Requires master token).
 
 GET /status: Returns the internal health status of the automated test system.
+<img width="1091" height="519" alt="screenshot_20260815_010808" src="https://github.com/user-attachments/assets/763e30e7-90d0-4088-a730-1b77d38e390f" />
