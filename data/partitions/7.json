@@ -1,0 +1,35 @@
+{
+   "70c820d7-b0e8-4052-a924-00accd757ae2": {
+      "type": "Feature",
+      "id": "70c820d7-b0e8-4052-a924-00accd757ae2",
+      "geometry": {
+         "type": "Point",
+         "coordinates": [
+            -3.7038,
+            40.4168
+         ]
+      },
+      "properties": {
+         "name": "RobotTester",
+         "age": 1,
+         "gender": true,
+         "address": "Reloj de la Puerta del Sol, 7, Puerta del Sol, Barrio de los Austrias, Sol, Centro, Madrid, Comunidad de Madrid, 28013, Espa\u00f1a",
+         "history": [
+            {
+               "coordinates": [
+                  -3.7037,
+                  40.4167
+               ],
+               "time": "2026-08-14T22:22:16.038053+00:00"
+            },
+            {
+               "coordinates": [
+                  -3.7038,
+                  40.4168
+               ],
+               "time": "2026-08-14T22:22:16.048474+00:00"
+            }
+         ]
+      }
+   }
+}

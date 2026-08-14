@@ -1,0 +1,54 @@
+{
+   "6c4938ff-d82b-422b-85fc-c5a470150846": {
+      "type": "Feature",
+      "id": "6c4938ff-d82b-422b-85fc-c5a470150846",
+      "geometry": {
+         "type": "Point",
+         "coordinates": [
+            2.1701,
+            41.3871
+         ]
+      },
+      "properties": {
+         "name": "Pau",
+         "age": 51,
+         "gender": true,
+         "address": "Catalunya, Pla\u00e7a de Catalunya, la Dreta de l'Eixample, l'Eixample, Barcelona, Barcelon\u00e8s, Barcelona, Catalunya, 08007, Espa\u00f1a",
+         "history": [
+            {
+               "coordinates": [
+                  2.1701,
+                  41.3871
+               ],
+               "time": "2026-08-14T22:37:16.871831+00:00"
+            }
+         ]
+      }
+   },
+   "6b938cf5-4c74-4994-a3d1-8603eb28e6a0": {
+      "type": "Feature",
+      "id": "6b938cf5-4c74-4994-a3d1-8603eb28e6a0",
+      "geometry": {
+         "type": "Point",
+         "coordinates": [
+            2.18,
+            41.39
+         ]
+      },
+      "properties": {
+         "name": "Emma",
+         "age": 49,
+         "gender": false,
+         "address": "20, Carrer del Rec Comtal, Sant Pere, Sant Pere, Santa Caterina i la Ribera, Ciutat Vella, Barcelona, Barcelon\u00e8s, Barcelona, Catalunya, 08003, Espa\u00f1a",
+         "history": [
+            {
+               "coordinates": [
+                  2.18,
+                  41.39
+               ],
+               "time": "2026-08-14T22:37:17.589751+00:00"
+            }
+         ]
+      }
+   }
+}

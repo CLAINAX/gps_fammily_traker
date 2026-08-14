@@ -1,0 +1,11 @@
+version: '3.8'
+
+services:
+  live360-api:
+    build: .
+    container_name: live360_container
+    ports:
+      - "6663:8000"
+    volumes:
+      - ./data:/app/data
+    restart: unless-stopped

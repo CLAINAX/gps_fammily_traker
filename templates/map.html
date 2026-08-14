@@ -1,0 +1,343 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Historial de Ubicaciones Familiar</title>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <style>
+        body { margin: 0; padding: 0; }
+        #map { height: 100vh; width: 100%; margin: 0; padding: 0; }
+        #menu-toggle {
+            position: absolute;
+            top: 15px;
+            right: 15px;
+            z-index: 1000;
+            padding: 10px 15px;
+            background: white;
+            border: 2px solid rgba(0,0,0,0.2);
+            border-radius: 5px;
+            cursor: pointer;
+            font-weight: bold;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.3);
+        }
+        #sidebar {
+            position: absolute;
+            top: 0;
+            right: -300px;
+            width: 280px;
+            height: 100vh;
+            background: white;
+            z-index: 999;
+            transition: right 0.3s ease;
+            box-shadow: -2px 0 5px rgba(0,0,0,0.3);
+            padding: 60px 20px 20px 20px;
+            box-sizing: border-box;
+            font-family: Arial, sans-serif;
+            overflow-y: auto;
+        }
+        #sidebar.active { right: 0; }
+        .menu-opcion {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 10px;
+            font-size: 15px;
+            margin-bottom: 15px;
+            cursor: pointer;
+        }
+        .family-btn {
+            width: 100%;
+            padding: 10px;
+            margin-bottom: 8px;
+            background: #f0f0f0;
+            border: 1px solid #ccc;
+            border-radius: 5px;
+            cursor: pointer;
+            font-weight: bold;
+            text-align: left;
+            transition: background 0.2s;
+        }
+        .family-btn:hover { background: #e0e0e0; }
+    </style>
+</head>
+<body>
+    <button id="menu-toggle">☰ Menú</button>
+    
+    <button id="health-btn" style="position: absolute; top: 15px; left: 60px; z-index: 1000; padding: 10px 15px; background: green; color: white; border: 2px solid rgba(0,0,0,0.2); border-radius: 5px; font-weight: bold; box-shadow: 0 2px 5px rgba(0,0,0,0.3);">🟢 API OK</button>
+
+    <div id="sidebar">
+        <h3>Ajustes del Mapa</h3>
+        
+        <label class="menu-opcion">
+            <span>Mostrar historial de rutas</span>
+            <input type="checkbox" id="toggle-historial">
+        </label>
+
+        <!-- MEJORA 1: Selector de Color -->
+        <label class="menu-opcion">
+            <span>Color del trazado</span>
+            <input type="color" id="color-picker" value="#0055ff">
+        </label>
+
+        <hr style="border: 0; border-top: 1px solid #eee; margin: 20px 0;">
+        
+        <!-- MEJORA 2: Buscador Rápido -->
+        <h3>Miembros de la Familia</h3>
+        <div id="family-list">
+            <!-- Los botones se generarán solos aquí -->
+            <p style="font-size: 13px; color: gray;">Buscando ubicaciones...</p>
+        </div>
+    </div>
+    
+    <div id="map"></div>
+    
+    <script>
+        var map = L.map('map').setView([40.4167, -3.7037], 6);
+
+        L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
+            maxZoom: 19,
+            attribution: 'Tiles &copy; Esri'
+        }).addTo(map);
+
+        var polylines = {};
+        var routeDots = {}; 
+        var markers = {};
+        var safeZones = {}; // Capa para las "Zonas Seguras"
+        
+        var currentToken = "abc_123"; 
+        let mostrarHistorial = false;
+        let colorRuta = "#0055ff"; // Color por defecto
+
+        const btnMenu = document.getElementById('menu-toggle');
+        const sidebar = document.getElementById('sidebar');
+        const checkboxHistorial = document.getElementById('toggle-historial');
+        const colorPicker = document.getElementById('color-picker');
+        const familyList = document.getElementById('family-list');
+
+        btnMenu.addEventListener('click', () => sidebar.classList.toggle('active'));
+        
+        checkboxHistorial.addEventListener('change', (e) => {
+            mostrarHistorial = e.target.checked;
+            cargarHistorial(); 
+        });
+
+        // Evento que redibuja todo cuando cambias el color
+        colorPicker.addEventListener('input', (e) => {
+            colorRuta = e.target.value;
+            cargarHistorial();
+        });
+
+        function obtenerDistanciaMts(lat1, lon1, lat2, lon2) {
+            const R = 6371e3; 
+            const p1 = lat1 * Math.PI / 180;
+            const p2 = lat2 * Math.PI / 180;
+            const dp = (lat2 - lat1) * Math.PI / 180;
+            const dl = (lon2 - lon1) * Math.PI / 180;
+            const a = Math.sin(dp/2) * Math.sin(dp/2) + Math.cos(p1) * Math.cos(p2) * Math.sin(dl/2) * Math.sin(dl/2);
+            const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+            return R * c;
+        }
+
+        function formatearTiempo(ms) {
+            let mins = Math.floor(ms / 60000);
+            if (mins < 60) return `${mins} min`;
+            let hrs = Math.floor(mins / 60);
+            mins = mins % 60;
+            if (hrs < 24) return `${hrs} h ${mins} min`;
+            let days = Math.floor(hrs / 24);
+            return `${days} d ${hrs % 24} h`;
+        }
+
+        function cargarHistorial() {
+            fetch('/users', {
+                headers: { 'Authorization': 'Bearer ' + currentToken }
+            })
+            .then(res => {
+                if (res.status === 401) {
+                    return fetch('/refresh?secret=max123')
+                        .then(r => r.json())
+                        .then(nouToken => {
+                            currentToken = nouToken; 
+                            return fetch('/users', { headers: { 'Authorization': 'Bearer ' + currentToken } }).then(r => r.json());
+                        });
+                }
+                return res.json();
+            })
+            .then(geojson => {
+                if (!geojson.features) return;
+                
+                // Limpiamos el panel familiar para actualizarlo sin duplicados
+                familyList.innerHTML = '';
+
+                geojson.features.forEach(feature => {
+                    let id = feature.id;
+                    let props = feature.properties;
+                    let historial = props.history;
+
+                    if (historial && historial.length > 0) {
+                        let last = historial[historial.length - 1];
+                        let lastLat = last.coordinates[1];
+                        let lastLon = last.coordinates[0];
+
+                        // --- MEJORA 2: Botón de Localización en Menú ---
+                        let btnFamiliar = document.createElement('button');
+                        btnFamiliar.className = 'family-btn';
+                        btnFamiliar.innerHTML = `🎯 Localizar a <b>${props.name}</b>`;
+                        btnFamiliar.onclick = () => {
+                            map.setView([lastLat, lastLon], 17); // Hace zoom a su posición
+                            markers[id].openPopup();
+                            // Si en móvil cerramos el panel automáticamente
+                            if(window.innerWidth < 600) sidebar.classList.remove('active');
+                        };
+                        familyList.appendChild(btnFamiliar);
+
+                        let speedKmh = 0;
+                        let statusText = "Quieto";
+                        let dwellStart = new Date(last.time);
+                        let isStationary = true;
+
+                        if (historial.length > 1) {
+                            let prev = historial[historial.length - 2];
+                            let prevLat = prev.coordinates[1];
+                            let prevLon = prev.coordinates[0];
+                            
+                            let timeDiffSecs = (new Date(last.time) - new Date(prev.time)) / 1000;
+                            if (timeDiffSecs > 0 && timeDiffSecs <= 1800) {
+                                let dist = obtenerDistanciaMts(prevLat, prevLon, lastLat, lastLon);
+                                speedKmh = (dist / timeDiffSecs) * 3.6;
+                            }
+
+                            if (speedKmh < 1.5) {
+                                statusText = "Quieto / En casa";
+                            } else {
+                                isStationary = false;
+                                if (speedKmh < 9) statusText = "Caminando / Corriendo";
+                                else if (speedKmh < 35) statusText = "Bicicleta / Patinete";
+                                else statusText = "En vehículo";
+                            }
+
+                            for (let i = historial.length - 1; i >= 0; i--) {
+                                let p = historial[i];
+                                let d = obtenerDistanciaMts(lastLat, lastLon, p.coordinates[1], p.coordinates[0]);
+                                if (d > 50) break;
+                                dwellStart = new Date(p.time);
+                            }
+                        }
+                        
+                        let msSinceLastUpdate = new Date() - new Date(last.time);
+                        let timeAtLocation = formatearTiempo(new Date(last.time) - dwellStart);
+                        let updateText = "Activo recientemente";
+                        
+                        // --- MEJORA 4: Alarma de Desconexión (más de 1 hora) ---
+                        if (msSinceLastUpdate > 3600000) {
+                            statusText = `<span style="color:red; font-weight:bold;">🔴 DESCONECTADO</span>`;
+                            updateText = `Última señal hace ${formatearTiempo(msSinceLastUpdate)}`;
+                            isStationary = false; // Borramos la zona segura si está offline
+                        }
+                        
+                        let popupText = `<b>${props.name}</b><br>` +
+                                        `--> ${props.address || 'Ubicación desconocida'}<br>` +
+                                        `--> <b>Status:</b> ${statusText} (${speedKmh.toFixed(1)} km/h)<br>` +
+                                        `--> <b>Inactive:</b> ${timeAtLocation}<br>` +
+                                        `<small style="color:gray;">${updateText}</small>`;
+
+                        if (markers[id]) {
+                            markers[id].setLatLng([lastLat, lastLon]).getPopup().setContent(popupText);
+                        } else {
+                            markers[id] = L.marker([lastLat, lastLon]).addTo(map).bindPopup(popupText);
+                        }
+
+                        // --- MEJORA 3: Radar de Zona Segura ---
+                        if (safeZones[id]) map.removeLayer(safeZones[id]);
+                        if (isStationary) {
+                            safeZones[id] = L.circle([lastLat, lastLon], {
+                                color: 'lime',
+                                fillColor: 'lime',
+                                fillOpacity: 0.2,
+                                radius: 50 // Radio de 50 metros
+                            }).addTo(map);
+                        }
+
+                        // --- LIMPIEZA DE LÍNEAS VIEJAS ---
+                        if (polylines[id]) {
+                            map.removeLayer(polylines[id]);
+                            delete polylines[id];
+                        }
+                        if (routeDots[id]) {
+                            map.removeLayer(routeDots[id]);
+                            delete routeDots[id];
+                        }
+
+                        // --- DIBUJADO USANDO EL NUEVO COLOR ---
+                        if (mostrarHistorial) {
+                            let segmentos = [];
+                            let tramoActual = [];
+                            let puntosCapa = L.layerGroup(); 
+
+                            historial.forEach((p, index) => {
+                                let pLat = p.coordinates[1];
+                                let pLon = p.coordinates[0];
+
+                                L.circleMarker([pLat, pLon], {
+                                    radius: 4,          
+                                    color: colorRuta, // <- Usa el color del input  
+                                    weight: 2,          
+                                    fillColor: 'white', 
+                                    fillOpacity: 1      
+                                }).addTo(puntosCapa);
+
+                                if (index > 0) {
+                                    let prevP = historial[index - 1];
+                                    let timePrev = new Date(prevP.time);
+                                    let timeNow = new Date(p.time);
+                                    let diffMinutes = (timeNow - timePrev) / 60000;
+                                    
+                                    let distMts = obtenerDistanciaMts(prevP.coordinates[1], prevP.coordinates[0], pLat, pLon);
+
+                                    if (diffMinutes > 30 || distMts > 1000) {
+                                        if (tramoActual.length > 1) segmentos.push(tramoActual);
+                                        tramoActual = [];
+                                    }
+                                }
+                                tramoActual.push([pLat, pLon]);
+                            });
+                            
+                            if (tramoActual.length > 1) segmentos.push(tramoActual);
+
+                            if (segmentos.length > 0) {
+                                polylines[id] = L.polyline(segmentos, {color: colorRuta, weight: 4}).addTo(map);
+                            }
+                            
+                            routeDots[id] = puntosCapa.addTo(map);
+                        }
+                    }
+                });
+            })
+            .catch(err => console.log("Error al cargar el mapa:", err));
+        }
+
+        cargarHistorial();
+        setInterval(cargarHistorial, 5000);
+
+        function checkHealth() {
+            fetch('/status')
+                .then(res => res.json())
+                .then(data => {
+                    const btn = document.getElementById('health-btn');
+                    if (data.status === 0) {
+                        btn.style.background = 'green';
+                        btn.innerHTML = '🟢 API OK';
+                    } else {
+                        btn.style.background = 'red';
+                        btn.innerHTML = '🔴 ERROR (Revisa Server)';
+                    }
+                }).catch(err => console.log(err));
+        }
+        
+        setInterval(checkHealth, 15000); 
+        checkHealth();
+    </script>
+</body>
+</html>
